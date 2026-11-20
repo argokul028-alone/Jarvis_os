@@ -1,0 +1,186 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened helper primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedOwner(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidHttpUrl(url) {
+      return url is string
+        && url.size() >= 4
+        && url.size() <= 2048
+        && (url.matches('^https://.*') || url.matches('^http://.*') || url.matches('^jarvis://.*'));
+    }
+
+    function isValidBookmark(data) {
+      return data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid == request.auth.uid
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 200
+        && isValidHttpUrl(data.url)
+        && data.folder is string
+        && data.folder.size() >= 1
+        && data.folder.size() <= 64
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHistoryEntry(data) {
+      return data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid == request.auth.uid
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 240
+        && isValidHttpUrl(data.url)
+        && data.visitedAt is timestamp;
+    }
+
+    function isValidBrowserSettings(data) {
+      return data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid == request.auth.uid
+        && data.theme is string
+        && data.theme.size() <= 10
+        && (data.theme == 'dark' || data.theme == 'light')
+        && data.showBookmarksBar is bool
+        && data.enabledExtensions is list
+        && data.enabledExtensions.size() <= 8
+        && data.enabledExtensions.hasOnly([
+          'ad_shield',
+          'jarvis_summarizer',
+          'focus_dimmer',
+          'quick_notes'
+        ])
+        && data.updatedAt is timestamp;
+    }
+
+    // Per-user synchronized browser bookmarks
+    match /users/{userId}/bookmarks/{bookmarkId} {
+      allow get: if isOwner(userId)
+        && isValidId(userId)
+        && isValidId(bookmarkId)
+        && (resource == null || existing().uid == request.auth.uid);
+
+      allow list: if isOwner(userId)
+        && isValidId(userId)
+        && resource.data.uid == request.auth.uid;
+
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidId(bookmarkId)
+        && incoming().keys().hasAll(['uid', 'title', 'url', 'folder', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['uid', 'title', 'url', 'folder', 'createdAt', 'updatedAt'])
+        && isValidBookmark(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidId(bookmarkId)
+        && isValidBookmark(incoming())
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'url', 'folder', 'updatedAt']);
+
+      allow delete: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidId(bookmarkId)
+        && existing().uid == request.auth.uid;
+    }
+
+    // Per-user synchronized browsing history (never written in Private windows)
+    match /users/{userId}/history/{entryId} {
+      allow get: if isOwner(userId)
+        && isValidId(userId)
+        && isValidId(entryId)
+        && (resource == null || existing().uid == request.auth.uid);
+
+      allow list: if isOwner(userId)
+        && isValidId(userId)
+        && resource.data.uid == request.auth.uid;
+
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidId(entryId)
+        && incoming().keys().hasAll(['uid', 'title', 'url', 'visitedAt'])
+        && incoming().keys().hasOnly(['uid', 'title', 'url', 'visitedAt'])
+        && isValidHistoryEntry(incoming())
+        && incoming().visitedAt == request.time;
+
+      allow update: if false;
+
+      allow delete: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && isValidId(entryId)
+        && existing().uid == request.auth.uid;
+    }
+
+    // Per-user synchronized browser settings (fixed document ID: 'browser')
+    match /users/{userId}/settings/{settingId} {
+      allow get: if isOwner(userId)
+        && isValidId(userId)
+        && settingId == 'browser'
+        && (resource == null || existing().uid == request.auth.uid);
+
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && settingId == 'browser'
+        && incoming().keys().hasAll(['uid', 'theme', 'showBookmarksBar', 'enabledExtensions', 'updatedAt'])
+        && incoming().keys().hasOnly(['uid', 'theme', 'showBookmarksBar', 'enabledExtensions', 'updatedAt'])
+        && isValidBrowserSettings(incoming())
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && settingId == 'browser'
+        && isValidBrowserSettings(incoming())
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['theme', 'showBookmarksBar', 'enabledExtensions', 'updatedAt']);
+
+      allow delete: if isVerifiedOwner(userId)
+        && isValidId(userId)
+        && settingId == 'browser'
+        && existing().uid == request.auth.uid;
+    }
+  }
+}

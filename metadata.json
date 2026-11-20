@@ -1,0 +1,6 @@
+{
+  "name": "JARVISOS - The AI-Native Mobile & Workstation Operating System",
+  "description": "Commercial-grade, capability-based AI operating system designed from first principles with Aegis Microkernel, NovaFS, Synapse Neural Engine, and Iron Man HUD.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

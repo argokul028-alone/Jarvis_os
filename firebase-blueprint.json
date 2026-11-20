@@ -1,0 +1,125 @@
+{
+  "entities": {
+    "BrowserBookmark": {
+      "title": "BrowserBookmark",
+      "description": "A saved browser bookmark synchronized to the user's Google account.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Display title of the bookmarked page."
+        },
+        "url": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 2048,
+          "format": "uri",
+          "description": "Normalized HTTP/HTTPS URL of the bookmark."
+        },
+        "folder": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Bookmark folder or bar placement name."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the bookmark was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the bookmark was last updated."
+        }
+      },
+      "required": ["uid", "title", "url", "folder", "createdAt", "updatedAt"]
+    },
+    "BrowserHistoryEntry": {
+      "title": "BrowserHistoryEntry",
+      "description": "A visited page record in the user's non-private browsing history.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "description": "Page title at the time of visit."
+        },
+        "url": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 2048,
+          "format": "uri",
+          "description": "Visited URL."
+        },
+        "visitedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the page visit."
+        }
+      },
+      "required": ["uid", "title", "url", "visitedAt"]
+    },
+    "BrowserSettings": {
+      "title": "BrowserSettings",
+      "description": "Per-user JARVIS Browser preferences including browser-scoped theme, bookmarks bar visibility, and enabled extensions.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["dark", "light"],
+          "description": "Browser-scoped theme mode."
+        },
+        "showBookmarksBar": {
+          "type": "boolean",
+          "description": "Whether the browser bookmarks bar is visible."
+        },
+        "enabledExtensions": {
+          "type": "array",
+          "description": "Allowlisted built-in extension IDs enabled for this user."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last settings update."
+        }
+      },
+      "required": ["uid", "theme", "showBookmarksBar", "enabledExtensions", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/bookmarks/{bookmarkId}": {
+      "schema": {
+        "$ref": "#/entities/BrowserBookmark"
+      },
+      "description": "Per-user synchronized browser bookmarks."
+    },
+    "/users/{userId}/history/{entryId}": {
+      "schema": {
+        "$ref": "#/entities/BrowserHistoryEntry"
+      },
+      "description": "Per-user synchronized standard browsing history."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": {
+        "$ref": "#/entities/BrowserSettings"
+      },
+      "description": "Per-user browser settings document (fixed ID 'browser')."
+    }
+  }
+}
